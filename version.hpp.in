@@ -1,0 +1,3 @@
+// the configured options and settings for Tutorial
+#define VERSION "@VERSION@"
+#cmakedefine DEBUG_ON_MY

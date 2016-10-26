@@ -1,1 +1,0 @@
-add_library(exampleLib SHARED exampleLib.cpp)

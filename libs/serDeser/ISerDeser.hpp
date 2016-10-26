@@ -5,8 +5,8 @@
  *      Author: rogal
  */
 
-#ifndef DRV_ISERDESER_HPP_
-#define DRV_ISERDESER_HPP_
+#ifndef LIBS_SERDESER_ISERDESER_HPP_
+#define LIBS_SERDESER_ISERDESER_HPP_
 
 #include <string>
 
@@ -19,8 +19,11 @@ public:
    virtual void Serialize( Json::Value& root ) =0;
    virtual void Deserialize( Json::Value& root) =0;
 
+   //serializes fields to JSON node, and then to nice string
    void SerStr ( std::string& str );
+
+   //deserializes string to JSON and then to fields
    bool DeserStr ( std::string& str );
 };
 
-#endif /* DRV_ISERDESER_HPP_ */
+#endif /* LIBS_SERDESER_ISERDESER_HPP_ */

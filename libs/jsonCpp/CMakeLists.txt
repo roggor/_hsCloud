@@ -1,0 +1,1 @@
+add_library(jsonCpp SHARED jsoncpp.cpp)

@@ -4,7 +4,7 @@
  *  Created on: Oct 6, 2016
  *      Author: rogal
  */
-#include "ISerDeser.hpp"
+#include "../libs/serDeser/ISerDeser.hpp"
 
 void ISerDeser::SerStr(std::string& str)
 {

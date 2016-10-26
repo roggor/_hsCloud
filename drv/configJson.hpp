@@ -9,7 +9,8 @@
 #define DRV_CONFIGJSON_HPP_
 
 #include <iostream>
-#include "ISerDeser.hpp"
+
+#include "../libs/serDeser/ISerDeser.hpp"
 
 class ConfigClass : public ISerDeser
 {

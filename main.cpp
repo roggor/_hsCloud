@@ -5,7 +5,6 @@
  *      Author: rogal
  */
 #include "globConfs.hpp"
-#include "configJson.hpp"
 
 #include <fstream>
 #include <iostream>
@@ -13,7 +12,7 @@
 #include <string>
 #include <unistd.h>
 
-#include "mainCloudSim.hpp"
+#include "cloudServerSim.hpp"
 #include "version.hpp"
 #include "rabbitDrv.hpp"
 #include "bbRegistration.hpp"
@@ -71,22 +70,22 @@ int main(int argc, char *argv[]){
 	//read in configuration from config file
 	configGlob = new ConfigClass(GLOB_CONFIG_FILE);
 
+	//InitCliThread();
+
 	if (do_server)
 	{
-		mainCloudSim();
+		cloudServerSimClass cloudServerSim;
+		cloudServerSim.init();
+		cloudServerSim.shutdown();
 		return 0;
 	}
+	else
+	{
 
-	InitCliThread();
-//	rbMQConsumerInit();
-
-	bbRegistrationClass bbRegistration;
-	bbRegistration.init();
-
-	while(1) {}
-
-	bbRegistration.shutdown();
-
-	return 0;
+		bbRegistrationClass bbRegistration;
+		bbRegistration.init();
+		bbRegistration.shutdown();
+		return 0;
+	}
 }
 

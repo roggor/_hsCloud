@@ -24,4 +24,5 @@ bool ISerDeser::DeserStr(std::string& str)
 		return false;
 
 	this->Deserialize(deserializeRoot);
+	return true;
 }

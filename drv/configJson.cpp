@@ -14,6 +14,7 @@ void ConfigClass::Serialize( Json::Value& root )
 	root["mConfigName"] = mConfigName;
 	root["mConfigVersion"] = mConfigVersion;
 	root["mWashCarAddress"] = mWashCarAddress;
+	root["mBbId"] = mBbId;
 	root["mWashId"] = mWashId;
 }
 
@@ -22,6 +23,7 @@ void ConfigClass::Deserialize( Json::Value& root )
 	mConfigName = root.get("mConfigName","").asString();
 	mConfigVersion = root.get("mConfigVersion","").asString();
 	mWashCarAddress = root.get("mWashCarAddress","").asString();
+	mBbId = root.get("mBbId","").asString();
 	mWashId = root.get("mWashId",0).asInt();
 }
 

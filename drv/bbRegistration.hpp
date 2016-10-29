@@ -13,15 +13,13 @@
 #include <mutex>
 #include <condition_variable>
 
-#include "../libs/serDeser/ISerDeser.hpp"
+#include "ISerDeser.hpp"
+#include "rabbitDrv.hpp"
 
 class bbRegistrationClass
 {
 	unsigned int rxSeqNumber, rxRegState, rxTimeStamp;
-	static const std::string rxQueueName;
-
-	unsigned int txSeqNumber, txRegState;
-	static const std::string txQueueName;
+	unsigned int txSeqNumber=0, txRegState=0;
 
 	bool canTx;
 	bool canRx;
@@ -35,28 +33,16 @@ class bbRegistrationClass
 
 	void regReqTxThreadFunc(void);
 	void regResRxThreadFunc(void);
+
+	amqp_connection_state_t connRx;
+	amqp_connection_state_t connTx;
+
+	amqp_bytes_t queuenameRx;
+
 public:
 	std::string bbRegString;
 	void init(void);
 	void shutdown(void);
-};
-
-class PingMsgClass : public ISerDeser
-{
-public:
-	PingMsgClass( int mSeqNr, int mRegState, int mTimeStamp, std::string mReplyToQueueName)
-		: mSeqNr(mSeqNr), mRegState(mRegState), mTimeStamp(mTimeStamp), mReplyToQueueName(mReplyToQueueName)
-		{}
-	virtual ~PingMsgClass( void ){};
-
-	virtual void Serialize( Json::Value& root );
-	virtual void Deserialize( Json::Value& root);
-
-private:
-	int mSeqNr;
-	int mRegState;
-	int mTimeStamp;
-	std::string mReplyToQueueName;
 };
 
 #endif /* DRV_BBREGISTRATION_HPP_ */

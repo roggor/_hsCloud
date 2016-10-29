@@ -25,6 +25,7 @@ message("Using TARGET_ARCH = " ${TARGET_ARCH} ", libs/inc taken from ../_install
 
 include_directories("${PROJECT_SOURCE_DIR}/config" "${PROJECT_SOURCE_DIR}/debug" "${PROJECT_SOURCE_DIR}/drv")
 include_directories("${PROJECT_SOURCE_DIR}/libs/jsonCpp/json")
+include_directories("${PROJECT_SOURCE_DIR}/libs/serDeser")
 
 include_directories("../_install_${TARGET_ARCH}/include")
 link_directories("../_install_${TARGET_ARCH}/lib")

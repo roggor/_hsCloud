@@ -10,23 +10,25 @@
 
 #include <iostream>
 
-#include "../libs/serDeser/ISerDeser.hpp"
+#include "ISerDeser.hpp"
 
 class ConfigClass : public ISerDeser
 {
+	std::string    mConfigName;
+	std::string    mConfigVersion;
+	std::string    mWashCarAddress;
+	std::string    mBbId;
+	int            mWashId;
+
 public:
 	ConfigClass( void );
 	ConfigClass( std::string filePath);
-	virtual ~ConfigClass( void ){};
+	virtual ~ConfigClass( void ){}
 
 	virtual void Serialize( Json::Value& root );
 	virtual void Deserialize( Json::Value& root);
 
-private:
-	std::string    mConfigName;
-	std::string    mConfigVersion;
-	std::string    mWashCarAddress;
-	int            mWashId;
+	std::string getBbId(void) {return mBbId;}
 };
 
 #endif /* DRV_CONFIGJSON_HPP_ */

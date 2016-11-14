@@ -16,7 +16,6 @@ void PingMsgClass::Serialize( Json::Value& root )
 	root["mSeqNr"] = mSeqNr;
 	root["mRegState"] = mRegState;
 	root["mTimeStamp"] = mTimeStamp;
-	root["mReplyToQueueName"] = mReplyToQueueName;
 }
 
 void PingMsgClass::Deserialize( Json::Value& root )
@@ -25,5 +24,14 @@ void PingMsgClass::Deserialize( Json::Value& root )
 	mSeqNr = root.get("mSeqNr",0).asInt();
 	mRegState = root.get("mRegState",0).asInt();
 	mTimeStamp = root.get("mTimeStamp",0).asInt();
-	mReplyToQueueName = root.get("mReplyToQueueName","").asString();
+}
+
+void PingMinMsgClass::Serialize( Json::Value& root )
+{
+	root["mMessageType"] = mMessageType;
+}
+
+void PingMinMsgClass::Deserialize( Json::Value& root )
+{
+	mMessageType = root.get("mMessageType","").asString();
 }

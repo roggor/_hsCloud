@@ -9,5 +9,6 @@
 #define DRV_CLI_HPP_
 
 void InitCliThread(void);
+void ShutdownCliThread(void);
 
 #endif /* DRV_CLI_HPP_ */

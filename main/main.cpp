@@ -12,13 +12,9 @@
 #include <string>
 #include <unistd.h>
 
-#include "cloudServerSim.hpp"
+#include "cloudWsCom.hpp"
 #include "version.hpp"
-#include "rabbitDrv.hpp"
-#include "bbRegistration.hpp"
 #include "cli.hpp"
-
-//3rd party
 #include "json.h" //sources/headres are included into project
 
 ConfigClass *configGlob = nullptr;
@@ -55,7 +51,7 @@ int main(int argc, char *argv[]){
 			break;
 
 	    case '?':
-	    	//printf("Help\n");
+	    	printf("Help\n");
 	    	break;
 
 	    case 0:     /* getopt_long() set a variable, just keep going */
@@ -70,22 +66,19 @@ int main(int argc, char *argv[]){
 	//read in configuration from config file
 	configGlob = new ConfigClass(GLOB_CONFIG_FILE);
 
-	//InitCliThread();
+	//websocket communication
+	cloudWsComClass *cloudWsComm = new cloudWsComClass();
+	cloudWsComm->init();
 
-	if (do_server)
-	{
-		cloudServerSimClass cloudServerSim;
-		cloudServerSim.init();
-		cloudServerSim.shutdown();
-		return 0;
-	}
-	else
-	{
+	InitCliThread();
 
-		bbRegistrationClass bbRegistration;
-		bbRegistration.init();
-		bbRegistration.shutdown();
-		return 0;
+	while(1)
+	{
+		sleep(1);
 	}
+
+	cloudWsComm->shutdown();
+	ShutdownCliThread();
 }
+
 

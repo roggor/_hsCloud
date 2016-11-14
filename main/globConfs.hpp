@@ -13,7 +13,8 @@
 
 //Rabbit MQ related configs
 //#ifdef TARGET_ARM
-	#define RB_MQ_SERVER_NAME "192.168.7.1"
+#define RB_MQ_SERVER_NAME "51.254.214.190"
+//	#define RB_MQ_SERVER_NAME "192.168.7.1"
 //#else
 //	#define RB_MQ_SERVER_NAME "localhost"
 //#endif

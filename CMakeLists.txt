@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.9)
-project (hello)
+project (hsCloudBB)
 
 option (DEBUG_ON_MY "Turns on debugs" ON)
 
@@ -16,24 +16,24 @@ if(NOT DEFINED TARGET_ARCH)
 endif()
 
 configure_file (
-  "${PROJECT_SOURCE_DIR}/config/version.hpp.in"
-  "${PROJECT_SOURCE_DIR}/config/version.hpp"
+  "${PROJECT_SOURCE_DIR}/main/version.hpp.in"
+  "${PROJECT_SOURCE_DIR}/main/version.hpp"
   )
 
 
-message("Using TARGET_ARCH = " ${TARGET_ARCH} ", libs/inc taken from ../_install_" ${TARGET_ARCH})
+message("Using TARGET_ARCH = " ${TARGET_ARCH} ", libs/inc taken from ../../_install_" ${TARGET_ARCH})
 
-include_directories("${PROJECT_SOURCE_DIR}/config" "${PROJECT_SOURCE_DIR}/debug" "${PROJECT_SOURCE_DIR}/drv")
+include_directories("${PROJECT_SOURCE_DIR}/main" "${PROJECT_SOURCE_DIR}/drv")
 include_directories("${PROJECT_SOURCE_DIR}/libs/jsonCpp/json")
 include_directories("${PROJECT_SOURCE_DIR}/libs/serDeser")
 
-include_directories("../_install_${TARGET_ARCH}/include")
-link_directories("../_install_${TARGET_ARCH}/lib")
+include_directories("../../_install_${TARGET_ARCH}/include")
+link_directories("../../_install_${TARGET_ARCH}/lib")
 
 add_subdirectory(libs)
 add_definitions(-std=c++0x -fpermissive)
 
-file(GLOB SOURCES "debug/*.cpp" "drv/*.cpp" "./*.cpp")
+file(GLOB SOURCES "main/*.cpp" "drv/*.cpp" "./*.cpp")
 
-add_executable(hello ${SOURCES})
-target_link_libraries(hello serDeser jsonCpp rabbitmq pthread cli)
+add_executable(hsCloudBB ${SOURCES})
+target_link_libraries(hsCloudBB serDeser jsonCpp rabbitmq pthread cli websockets)

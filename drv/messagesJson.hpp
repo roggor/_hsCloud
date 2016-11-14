@@ -14,10 +14,9 @@ class MsgClass : public ISerDeser
 {
 protected:
 	std::string mMessageType;
-	std::string mReplyToQueueName;
 public:
-	MsgClass(std::string mMessageType, std::string mReplyToQueueName)
-	: mMessageType(mMessageType), mReplyToQueueName(mReplyToQueueName) {}
+	MsgClass(std::string mMessageType)
+	: mMessageType(mMessageType) {}
 	virtual ~MsgClass(void) {}
 
 	void Serialize( Json::Value& root ) override {}
@@ -27,8 +26,8 @@ public:
 class PingMsgClass : public MsgClass
 {
 public:
-	PingMsgClass( std::string mReplyToQueueName, int mSeqNr, int mRegState, int mTimeStamp)
-		: MsgClass("regPing", mReplyToQueueName), mSeqNr(mSeqNr), mRegState(mRegState), mTimeStamp(mTimeStamp) {}
+	PingMsgClass( int mSeqNr, int mRegState, int mTimeStamp)
+		: MsgClass("regPing"), mSeqNr(mSeqNr), mRegState(mRegState), mTimeStamp(mTimeStamp) {}
 	virtual ~PingMsgClass( void ){}
 
 	void Serialize( Json::Value& root ) override;
@@ -39,5 +38,29 @@ public: //should be private
 	int mRegState;
 	int mTimeStamp;
 };
+
+
+/*************************************************/
+class PingMinMsgClass : public MsgClass
+{
+public:
+	PingMinMsgClass(void)
+		: MsgClass("regPingMin") {}
+	virtual ~PingMinMsgClass( void ){}
+
+	void Serialize( Json::Value& root ) override;
+	void Deserialize( Json::Value& root) override;
+};
+/*************************************************/
+
+
+
+
+
+
+
+
+
+
 
 #endif /* DRV_MESSAGESJSON_HPP_ */

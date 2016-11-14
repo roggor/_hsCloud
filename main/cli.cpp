@@ -28,6 +28,8 @@ extern "C"
 #include <libcli.h>
 }
 
+static pthread_t cli_thread;
+
 int usartComRxPrintStats(struct cli_def *cli, char *command, char *argv[], int argc)
 {
 	cli_print(cli, (char*)"usartComRxPrintStats\n");
@@ -95,10 +97,14 @@ void InitCli(void)
 void InitCliThread(void)
 {
 	int res;
-	pthread_t cli_thread;
 	res = pthread_create(&cli_thread, nullptr, InitCli, nullptr);
 	if (res != 0) {
 		perror("Thread cli_thread creation failed");
 		exit(EXIT_FAILURE);
 	}
+}
+
+void ShutdownCliThread(void)
+{
+	pthread_join(cli_thread, NULL);
 }

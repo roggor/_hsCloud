@@ -39,28 +39,4 @@ public: //should be private
 	int mTimeStamp;
 };
 
-
-/*************************************************/
-class PingMinMsgClass : public MsgClass
-{
-public:
-	PingMinMsgClass(void)
-		: MsgClass("regPingMin") {}
-	virtual ~PingMinMsgClass( void ){}
-
-	void Serialize( Json::Value& root ) override;
-	void Deserialize( Json::Value& root) override;
-};
-/*************************************************/
-
-
-
-
-
-
-
-
-
-
-
 #endif /* DRV_MESSAGESJSON_HPP_ */

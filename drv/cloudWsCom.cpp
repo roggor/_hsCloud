@@ -81,20 +81,20 @@ void cloudWsComClass::rxThreadFunc(void)
 
 void cloudWsComClass::pollThreadFunc(void)
 {
-	PingMinMsgClass *pingMinTx;
+	PingMsgClass *pingTx;
 
 	while(1)
 	{
-		waitGridDelay(1000);
+		waitGridDelay(2000);
 
-		pingMinTx=new PingMinMsgClass();
+		pingTx=new PingMsgClass(0,0,0);
 
-		std::string pingMinTxDeserStr;
-		pingMinTx->SerStr(pingMinTxDeserStr);
+		std::string pingTxDeserStr;
+		pingTx->SerStr(pingTxDeserStr);
 
-		dbg_info("Client TX:\n%s\n", pingMinTxDeserStr.c_str());
+		dbg_info("Client TX:\n%s\n", pingTxDeserStr.c_str());
 
-		libwsApi_send(pingMinTxDeserStr.c_str(), sizeof(pingMinTxDeserStr.c_str())-1);
+		libwsApi_send(pingTxDeserStr.c_str(), pingTxDeserStr.length());
 	}
 }
 

@@ -10,31 +10,16 @@
 
 #define GLOB_CONFIG_FILE "../config/config.json"
 
-
-//Rabbit MQ related configs
-//#ifdef TARGET_ARM
-#define RB_MQ_SERVER_NAME "51.254.214.190"
-//	#define RB_MQ_SERVER_NAME "192.168.7.1"
-//#else
-//	#define RB_MQ_SERVER_NAME "localhost"
-//#endif
-
-#define RB_MQ_PORT 5672
-
-//global ones, for each BB the same
-#define RB_MQ_DIRECT_EXCHANGE   "amq.direct"
-
-#define RB_MQ_BBREG_REQ_QUEUE  "regReqQ"
-#define RB_MQ_BBREG_REQ_KEY    "regReqK"
-
-
 #include "configJson.hpp"
 extern ConfigClass *configGlob;
 
-//must be appended with BB_ID, unique for each BB
-#define RB_MQ_BBREG_RES_QUEUE           "regResQ_"
-#define RB_MQ_BBREG_RES_QUEUE_UNIQUE_ID (RB_MQ_BBREG_RES_QUEUE+configGlob->getBbId())
-#define RB_MQ_BBREG_RES_KEY             "regResK_"
-#define RB_MQ_BBREG_RES_KEY_UNIQUE_ID   (RB_MQ_BBREG_RES_KEY+configGlob->getBbId())
+/* WS related config */
+#define WS_SERVER_IP "149.202.33.120"
+#define WS_SERVER_PORT 8143
+#define WS_SERVER_URI "/carwash-core/carwash/bb_0x0001/communication"
+#define WS_ETH_IF "eth0"
+
+
+#define PROTO_R_DEV_NAME "/dev/ttyS0"
 
 #endif /* GLOBCONFS_HPP_ */

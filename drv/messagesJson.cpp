@@ -25,13 +25,3 @@ void PingMsgClass::Deserialize( Json::Value& root )
 	mRegState = root.get("mRegState",0).asInt();
 	mTimeStamp = root.get("mTimeStamp",0).asInt();
 }
-
-void PingMinMsgClass::Serialize( Json::Value& root )
-{
-	root["mMessageType"] = mMessageType;
-}
-
-void PingMinMsgClass::Deserialize( Json::Value& root )
-{
-	mMessageType = root.get("mMessageType","").asString();
-}

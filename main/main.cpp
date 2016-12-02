@@ -12,6 +12,7 @@
 #include <string>
 #include <unistd.h>
 
+#include "protocolR.hpp"
 #include "cloudWsCom.hpp"
 #include "version.hpp"
 #include "cli.hpp"
@@ -70,7 +71,10 @@ int main(int argc, char *argv[]){
 	cloudWsComClass *cloudWsComm = new cloudWsComClass();
 	cloudWsComm->init();
 
+
 	InitCliThread();
+
+	protoInit ();
 
 	while(1)
 	{

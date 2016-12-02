@@ -82,6 +82,7 @@ void cloudWsComClass::rxThreadFunc(void)
 void cloudWsComClass::pollThreadFunc(void)
 {
 	PingMsgClass *pingTx;
+	int retSend;
 
 	while(1)
 	{
@@ -92,9 +93,16 @@ void cloudWsComClass::pollThreadFunc(void)
 		std::string pingTxDeserStr;
 		pingTx->SerStr(pingTxDeserStr);
 
-		dbg_info("Client TX:\n%s\n", pingTxDeserStr.c_str());
+		retSend=libwsApi_send(pingTxDeserStr.c_str(), pingTxDeserStr.length());
 
-		libwsApi_send(pingTxDeserStr.c_str(), pingTxDeserStr.length());
+		if(!retSend)
+		{
+			dbg_info("Client TX:\n%s\n", pingTxDeserStr.c_str());
+		}
+		else
+		{
+			dbg_err("Client TX failed\n");
+		}
 	}
 }
 

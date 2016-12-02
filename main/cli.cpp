@@ -16,6 +16,7 @@
 #include <thread>
 
 
+#include "protocolR.hpp"
 #include "cli.hpp"
 
 /*
@@ -32,7 +33,22 @@ static pthread_t cli_thread;
 
 int usartComRxPrintStats(struct cli_def *cli, char *command, char *argv[], int argc)
 {
-	cli_print(cli, (char*)"usartComRxPrintStats\n");
+	//TODO: change it somehow
+	char buf[1000];
+	unsigned int ret;
+	ret=protoGetGlobalStats(buf);
+    cli_print(cli, (char*)"%s\nSize: %u out of %lu\n", buf, ret, sizeof(buf));
+    return CLI_OK;
+}
+
+int usartComRxResetStats(struct cli_def *cli, char *command, char *argv[], int argc)
+{
+	//TODO: change it somehow
+	char buf[100];
+	unsigned int ret;
+
+	ret=protoResetGlobalStats(buf);
+	cli_print(cli, (char*)"%s\nSize: %u out of %lu\n", buf, ret, sizeof(buf));
     return CLI_OK;
 }
 
@@ -64,8 +80,9 @@ void InitCli(void)
 
 	// Set up a few simple one-level commands
 	stats=cli_register_command(cli, NULL, (char*)"prot", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, (char*)"help prot");
-	cli_register_command(cli, stats, (char*)"globStats", usartComRxPrintStats, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, (char*)"help globStats");
-	cli_register_command(cli, stats, (char*)"stanStats", stanStats, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, (char*)"help stanStats");
+	cli_register_command(cli, stats, (char*)"showStats", usartComRxPrintStats, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, (char*)"help showStats");
+	cli_register_command(cli, stats, (char*)"resetStats", usartComRxResetStats, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, (char*)"help resetStats");
+//	cli_register_command(cli, stats, (char*)"stanStats", stanStats, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, (char*)"help stanStats");
 
 	stan=cli_register_command(cli, NULL, (char*)"stan", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, (char*)"help stan");
 	cli_register_command(cli, stan, (char*)"setDisp", stanSetDisp, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, (char*)"help stanSetDisp");

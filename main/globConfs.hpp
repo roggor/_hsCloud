@@ -20,6 +20,6 @@ extern ConfigClass *configGlob;
 #define WS_ETH_IF "eth0"
 
 
-#define PROTO_R_DEV_NAME "/dev/ttyS0"
+#define PROTO_R_DEV_NAME "/dev/ttyS1"
 
 #endif /* GLOBCONFS_HPP_ */

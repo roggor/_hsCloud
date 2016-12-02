@@ -16,7 +16,7 @@
 #include "libwsApi.hpp"
 
 /*************************************************************************/
-//#define DBG_INFO
+#define DBG_INFO
 #define DBG_ERR
 
 #undef dbg_info
@@ -115,7 +115,6 @@ int libwsApi_send(char *pData, int dataLen)
 	else
 		dbg_err("dataLen > MAX_TX_PAYLOAD\n");
 
-
 	return -1;
 }
 
@@ -169,6 +168,7 @@ void lwsThreadFunc(void)
 	context = lws_create_context(&info);
 	if (context == NULL) {
 		dbg_err("libwebsocket init failed\n");
+		force_exit =1;
 	}
 
 	address[sizeof(address) - 1] = '\0';
@@ -191,7 +191,10 @@ void lwsThreadFunc(void)
 			}
 		}
 
-		lws_callback_on_writable(gWsi);
+		if (connState==ESTABLISHED)
+		{
+			lws_callback_on_writable(gWsi);
+		}
 		lws_service(context, 10);
 	}
 

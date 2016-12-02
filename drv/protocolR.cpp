@@ -13,29 +13,125 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <string.h>
 
+#include <queue>
 
 #include "globConfs.hpp"
 #include "protocolR.hpp"
 
+/*************************************************************************/
+//#define DBG_INFO
+#define DBG_ERR
+
+#undef dbg_info
+#ifdef DBG_INFO
+#define dbg_info(fmt, args...) printf("INFO %s(): " fmt, __func__, ##args)
+#else
+#define dbg_info(fmt, args ...)
+#endif
+
+#undef dbg_err
+#ifdef DBG_ERR
+#define dbg_err(fmt, args...) printf("ERR %s(): " fmt, __func__, ##args)
+#else
+#define dbg_err(...)
+#endif
+/*************************************************************************/
+
 static int fd;
 static usartCom_rx_t usartCom_rx={0, };
+std::queue<usartCom_tx_t> usartCom_tx;
+static usartComCritStats_t usartComCritStats = {0, };
+
+static int canTx;
+static pthread_mutex_t mutexCnt;
+static pthread_cond_t  condUsartCanTx;
 
 static void *rxRs485Thread(void *arg);
+static void *txRs485Thread(void *arg);
 static int parseRxProtocol(unsigned char *buff, unsigned int length, bool flush);
 
+
+int protoGetGlobalStats(char* str)
+{
+	/* TODO: any locking needed? */
+
+#define STATS(__stat__,__str__) ret=sprintf(p, "%s %u\n",__str__,__stat__); p=p+ret;
+
+	char *p=str;
+	unsigned int ret;
+
+	ret=sprintf(p, "Protocol get stats [dev=%s]:\n", PROTO_R_DEV_NAME); p=p+ret;
+	STATS(usartComCritStats.usartComPartialFrames,         "PartialFrames                    :")
+	STATS(usartComCritStats.usartComParssedRxOk,           "ParssedRxOk                      :")
+	STATS(usartComCritStats.usartComTxFrames,              "TxFrames                         :")
+	STATS(usartComCritStats.usartComFramesToMe,            "FramesToMe                       :")
+	STATS(usartComCritStats.usartComGoodFramesToMe,        "GoodFramesToMe                   :")
+	STATS(usartComCritStats.usartComFlushesNr,             "FlushesNr                        :")
+	STATS(usartComCritStats.usartComFramesBroadcast,       "FramesBroadcast(default=0)       :")
+	STATS(usartComCritStats.usartComFramesToOthers,        "FramesToOthers(default=0)        :")
+	STATS(usartComCritStats.usartComFramesFuncNotSupp,     "FramesFuncNotSupp(default=0)     :")
+	STATS(usartComCritStats.usartComFramesWaitingForStart, "FramesWaitingForStart(default=0) :")
+	STATS(usartComCritStats.usartComFramesWaitingForStop,  "FramesWaitingForStop(default=0)  :")
+	STATS(usartComCritStats.usartComFramesBedCrc,          "FramesBedCrc(default=0)          :")
+	STATS(usartComCritStats.usartComBufsWithoutContext,    "FramesWithoutContext(default=0)  :")
+	STATS(usartComCritStats.usartComShouldNotHappen,       "ShouldNotHappen(default=0)       :")
+	STATS(usartComCritStats.usartComParssedRxFailed,       "ParssedRxFailed(default=0)       :")
+	STATS(usartComCritStats.usartComTimeout,               "Timeout(default=0)               :")
+
+	ret=sprintf(p, "\n"); p=p+ret;
+	ret=sprintf(p, "Linux errors:\n"); p=p+ret;
+	STATS(usartComCritStats.readLinuxErr,                  "readLinuxErr(default=0)          :")
+	STATS(usartComCritStats.selectLinuxErr,                "selectLinuxErr(default=0)        :")
+	STATS(usartComCritStats.writeLinuxErr,                 "writeLinuxErr(default=0)         :")
+	return (p - str);
+#undef STATS
+}
+
+int protoResetGlobalStats(char* str)
+{
+	/* TODO: any locking needed? */
+	char *p=str;
+	unsigned int ret;
+
+	ret=sprintf(p, "Protocol reset stats [dev=%s]:\n", PROTO_R_DEV_NAME); p=p+ret;
+	memset(&usartComCritStats, 0, sizeof(usartComCritStats));
+
+	return (p - str);
+}
+
+static uint8_t inline usartComCRC (volatile uint8_t* frame, uint16_t len)
+{
+	uint8_t ret = 0xff;
+	uint16_t k=0;
+
+	for(k=0; k<len; k++)
+		ret ^= frame[k];
+
+	return ret;
+}
 
 void protoInit (void)
 {
 	int res;
 	pthread_t rx_thread;
+	pthread_t tx_thread;
 	struct termios newtio;
+
+	canTx=0;
+	res = pthread_mutex_init(&mutexCnt, NULL);
+	pthread_cond_init(&condUsartCanTx, NULL);
+	if (res != 0) {
+		dbg_err("mutex initialization failed");
+		exit(EXIT_FAILURE);
+	}
 
 	fd = open(PROTO_R_DEV_NAME, O_RDWR | O_NOCTTY );
 	if (fd < 0)
 	{
-		perror(PROTO_R_DEV_NAME);
-		exit(-1);
+		dbg_err("open %s failed\n", PROTO_R_DEV_NAME);
+		exit(EXIT_FAILURE);
 	}
 
 	bzero(&newtio, sizeof(newtio));
@@ -52,39 +148,15 @@ void protoInit (void)
 	tcflush(fd, TCIFLUSH);
 	tcsetattr(fd,TCSANOW,&newtio);
 
-#if 0
-	/* RS485 ioctls: */
-#define TIOCGRS485      0x542E
-#define TIOCSRS485      0x542F
-
-	struct serial_rs485 rs485conf;
-
-	/* Enable RS485 mode: */
-	rs485conf.flags |= SER_RS485_ENABLED;
-
-	/* Set logical level for RTS pin equal to 1 when sending: */
-	rs485conf.flags |= SER_RS485_RTS_ON_SEND;
-
-	/* Set logical level for RTS pin equal to 0 after sending: */
-	rs485conf.flags &= ~(SER_RS485_RTS_AFTER_SEND);
-
-	/* Set rts delay before send, if needed: */
-	rs485conf.delay_rts_before_send = 10;
-
-	/* Set rts delay after send, if needed: */
-	rs485conf.delay_rts_after_send = 10;
-
-	/* Set this flag if you want to receive data even whilst sending data */
-	//rs485conf.flags |= SER_RS485_RX_DURING_TX;
-
-	if (ioctl (fd, TIOCSRS485, &rs485conf) < 0) {
-		/* Error handling. See errno. */
-	}
-#endif
-
 	res = pthread_create(&rx_thread, NULL, rxRs485Thread, NULL);
 	if (res != 0) {
-		printf("Error pthread_create\n");
+		dbg_err("rx pthread_create failed\n");
+		exit(EXIT_FAILURE);
+	}
+
+	res = pthread_create(&tx_thread, NULL, txRs485Thread, NULL);
+	if (res != 0) {
+		dbg_err("tx pthread_create failed\n");
 		exit(EXIT_FAILURE);
 	}
 }
@@ -92,7 +164,7 @@ void protoInit (void)
 static void *rxRs485Thread(void *arg)
 {
 	int retSelect, retRead, parseRet;
-	unsigned char buff[255];
+	unsigned char buff[10000];
 	fd_set set;
 	struct timeval timeout;
 	int retFlush;
@@ -100,52 +172,98 @@ static void *rxRs485Thread(void *arg)
 	//read
 	while (1)
 	{
-		//sprawdzic czy read nie zwroci bledu
-		retRead=read(fd, buff, sizeof(buff));
-		if(retRead <= 0)
+		FD_ZERO(&set);
+		FD_SET(fd, &set);
+		timeout.tv_sec = 0;
+		timeout.tv_usec = PROT_RX_TIMEOUT_US;
+
+		retSelect=select(fd + 1, &set, NULL, NULL, &timeout);
+		if(retSelect < 0)
 		{
-			printf ("readLinuxErr++\n");
-			//usartComCritStats.readLinuxErr++;
-			continue;
+			usartComCritStats.selectLinuxErr++;
+			dbg_err("selectLinuxErr\n");
 		}
-
-		parseRet=parseRxProtocol(buff, retRead, false);
-		if (!parseRet)
+		else if(retSelect == 0)
 		{
-			printf("parseRxProtocol==0 OK\n");
-			//protoStatsIncr(pArgs->ttyNr, RECV_OK);
-			break;
-		}
-		else if (parseRet<0)
-		{
-			printf("parseRxProtocol<0 error\n");
-			//protoStatsIncr(pArgs->ttyNr, RECV_ERR);
-
-			usleep(20000); //17ms to jest 255 bajtow@115200
-			tcflush(fd, TCIFLUSH);
-
-			//only clean global variables in parseRxProtocol, and return rx_state
+			//Timeout, only clean global variables in parseRxProtocol, and return rx_state
 			retFlush=parseRxProtocol(NULL, 0, true);
-			//printf("parseRxError: addr=0x%x,rx_state=%u\n", usartCom_tx.addrReq, retFlush);
-			break;
+			usartComCritStats.usartComTimeout++;
+			dbg_info("timeout: rx_state=%u\n", retFlush);
 		}
 		else
 		{
-			printf("parseRxProtocol > 0; partial OK\n");
-			//protoStatsIncr(pArgs->ttyNr, RECV_PARTIAL);
+			//sprawdzic czy read nie zwroci bledu
+			retRead=read(fd, buff, sizeof(buff));
+			if(retRead <= 0)
+			{
+				dbg_err ("readLinuxErr\n");
+				usartComCritStats.readLinuxErr++;
+				continue;
+			}
+
+			parseRet=parseRxProtocol(buff, retRead, false);
+			if (parseRet<0)
+			{
+				retFlush=parseRxProtocol(NULL, 0, true);
+				dbg_err("parse RX critical, rx_state=%u\n", retFlush);
+			}
 		}
 	}
 }
 
-static uint8_t inline usartComCRC (volatile uint8_t* frame, uint16_t len)
+static void *txRs485Thread(void *arg)
 {
-	uint8_t ret = 0xff;
-	uint16_t k=0;
+	int ret;
+	unsigned int written;
+	usartCom_tx_t txFrame;
+	//write
+	while (1)
+	{
+		written=0;
 
-	for(k=0; k<len; k++)
-		ret ^= frame[k];
+		pthread_mutex_lock(&mutexCnt);
+		while (canTx<=0)
+			pthread_cond_wait(&condUsartCanTx, &mutexCnt);
 
-	return ret;
+		if (usartCom_tx.empty())
+		{
+			txFrame.usartComTxUnionFrame.usartComTxFrame[0]=USART_COM_STARTBYTE;
+			txFrame.usartComTxUnionFrame.usartComTxFrame[1]=USART_COM_MASTER_ADDR;
+			txFrame.usartComTxUnionFrame.usartComTxFrame[2]=FUNC_READ_BZ;
+			txFrame.usartComTxUnionFrame.usartComTxFrame[3]=usartComCRC(txFrame.usartComTxUnionFrame.usartComTxFrame, 3);
+			txFrame.usartComTxUnionFrame.usartComTxFrame[4]=USART_COM_STOPTBYTE;
+
+			txFrame.usartComTxDataLength=5;
+		}
+		else
+		{
+			//tu pewnie nie zadziala, moze jakies memcpy
+			txFrame=usartCom_tx.front();
+			usartCom_tx.pop();
+		}
+
+		do
+		{
+			ret=write(fd, (void*)(((unsigned char*)(txFrame.usartComTxUnionFrame.usartComTxFrame)) + written), (txFrame.usartComTxDataLength-written));
+			if (ret <= 0)
+			{
+				dbg_err("writeLinuxErr");
+				usartComCritStats.writeLinuxErr++;
+				break;
+			}
+			else
+				written=written+ret;
+		}
+		while (written!=txFrame.usartComTxDataLength);
+
+		if (ret > 0)
+			usartComCritStats.usartComTxFrames++;
+
+		tcdrain(fd);
+
+		canTx--;
+		pthread_mutex_unlock(&mutexCnt);
+	}
 }
 
 /*
@@ -160,15 +278,23 @@ static uint8_t inline usartComCRC (volatile uint8_t* frame, uint16_t len)
  */
 static int parseRxProtocol(unsigned char *buff, unsigned int length, bool flush)
 {
+	/*
+	 * sprawdzac usartComToMe
+	 * zwracac dobry stan do glownej funkcji (tzn czy choc jedna ramka dobra)
+	 * sprawdzic wszystko
+	 * ten timeout w select uzaleznic od tego czy choc jedna dobra
+	 */
+
 	unsigned int l;
+	int ret = 0;
 	uint8_t usartComRxByte;
 	USART_COM_RX_STATE_t flushRxState;
 
 	if (flush)
 	{
+		usartComCritStats.usartComFlushesNr++;
+
 		flushRxState=usartCom_rx.usartCom_rx_state;
-		//usartComCritStats.usartComFlushesNr++;
-		printf("usartComCritStats.usartComFlushesNr++\n");
 		usartCom_rx.usartCom_rx_state = WAITING_FOR_START_BYTE;
 		usartCom_rx.usartComDataLength=0;
 		usartCom_rx.usartComFunction = FUNC_INVALID;
@@ -185,30 +311,25 @@ static int parseRxProtocol(unsigned char *buff, unsigned int length, bool flush)
 			if (usartComRxByte == USART_COM_STARTBYTE)
 				usartCom_rx.usartCom_rx_state = WAITING_FOR_ADDR;
 			else
-			{
-				printf("usartComCritStats.usartComFramesWaitingForStart++\n");
-				//usartComCritStats.usartComFramesWaitingForStart++;
-			}
+				usartComCritStats.usartComFramesWaitingForStart++;
 			break;
 
 		case WAITING_FOR_ADDR:
 			if (usartComRxByte == USART_COM_SLAVE_ADDR)
 			{
-				printf("usartComCritStats.usartComFramesToMe++\n");
-				//usartComCritStats.usartComFramesToMe++;
+				usartComCritStats.usartComFramesToMe++;
 				usartCom_rx.usartCom_rx_state = WAITING_FOR_FUNC_CODE;
-			}
-			else if (usartComRxByte == USART_COM_BROADCAST_ADDR)
-			{
-				printf("usartComCritStats.usartComFramesBroadcast++\n");
-				//usartComCritStats.usartComFramesBroadcast++;
-				goto ERROR;
+				usartCom_rx.usartComToMe=true;
 			}
 			else
 			{
-				printf("usartComCritStats.usartComFramesToOthers++\n");
-				//usartComCritStats.usartComFramesToOthers++;
-				goto ERROR;
+				if (usartComRxByte == USART_COM_BROADCAST_ADDR)
+					usartComCritStats.usartComFramesBroadcast++;
+				else
+					usartComCritStats.usartComFramesToOthers++;
+
+				usartCom_rx.usartCom_rx_state = WAITING_FOR_FUNC_CODE;
+				usartCom_rx.usartComToMe=false;
 			}
 			break;
 
@@ -219,11 +340,16 @@ static int parseRxProtocol(unsigned char *buff, unsigned int length, bool flush)
 				usartCom_rx.usartCom_rx_state = WAITING_FOR_WRITE_DATA;
 				usartCom_rx.usartComFunction = FUNC_WRITE_ALL;
 				break;
+			/*
+			 * add new functions
+			 */
 
 			default:
-				printf("usartComCritStats.usartComFramesFuncNotSupp++\n");
-				//usartComCritStats.usartComFramesFuncNotSupp++;
-				goto ERROR;
+				usartComCritStats.usartComFramesFuncNotSupp++;
+				usartCom_rx.usartCom_rx_state = WAITING_FOR_START_BYTE;
+				usartCom_rx.usartComDataLength=0;
+				usartCom_rx.usartComFunction = FUNC_INVALID;
+				break;
 			}
 			break;
 
@@ -234,10 +360,13 @@ static int parseRxProtocol(unsigned char *buff, unsigned int length, bool flush)
 				if (usartCom_rx.usartComDataLength >= (FUNC_WRITE_ALL_LENGTH-3))
 					usartCom_rx.usartCom_rx_state=WAITING_FOR_CRC;
 				break;
+			/*
+			 * add new functions
+			 */
+
 			default:
-				printf("usartCom_rx.usartComCritStats.usartComShouldNotHappen++\n");
-				//usartComCritStats.usartComShouldNotHappen++;
-				goto ERROR;
+				usartComCritStats.usartComShouldNotHappen++;
+				return -1;
 			}
 			break;
 
@@ -246,23 +375,10 @@ static int parseRxProtocol(unsigned char *buff, unsigned int length, bool flush)
 				usartCom_rx.usartCom_rx_state=WAITING_FOR_STOP_BYTE;
 			else
 			{
-				printf("usartComCritStats.usartComFramesBedCrc++\n");
-				//usartComCritStats.usartComFramesBedCrc++;
-				usartCom_rx.usartCom_rx_state=WAITING_FOR_STOP_BYTE_ERROR_CRC;
-			}
-			break;
-
-		case WAITING_FOR_STOP_BYTE_ERROR_CRC:
-			if (usartComRxByte == USART_COM_STOPTBYTE)
-			{
-				printf("only bed CRC, stop OK\n");
-				usartCom_rx.usartCom_rx_state=WAITING_FOR_STOP_BYTE;
-			}
-			else
-			{
-				printf("usartComCritStats.usartComFramesWaitingForStop++\n");
-				//usartComCritStats.usartComFramesWaitingForStop++;
-				goto ERROR;
+				usartComCritStats.usartComFramesBedCrc++;
+				usartCom_rx.usartCom_rx_state = WAITING_FOR_START_BYTE;
+				usartCom_rx.usartComDataLength=0;
+				usartCom_rx.usartComFunction = FUNC_INVALID;
 			}
 			break;
 
@@ -272,8 +388,7 @@ static int parseRxProtocol(unsigned char *buff, unsigned int length, bool flush)
 				usartCom_rx.usartComRxUnionFrame.usartComRxFrame[usartCom_rx.usartComDataLength]=usartComRxByte;
 				usartCom_rx.usartComDataLength++;
 
-				printf("usartComCritStats.usartComGoodFramesToMe++\n");
-				//usartComCritStats.usartComGoodFramesToMe++;
+				usartComCritStats.usartComGoodFramesToMe++;
 
 #if 0
 				printf ("RCVED: ");
@@ -283,26 +398,54 @@ static int parseRxProtocol(unsigned char *buff, unsigned int length, bool flush)
 				printf ("\n");
 #endif
 
-				usartCom_rx.usartCom_rx_state = FINISHED;
+				if(usartCom_rx.usartComToMe)
+
+				switch (usartCom_rx.usartComFunction)
+				{
+				case FUNC_WRITE_ALL:
+					dbg_info("service FUNC_WRITE_ALL\n");
+					break;
+				/*
+				 * add new functions
+				 */
+
+				default:
+					usartComCritStats.usartComShouldNotHappen++;
+					return -1;
+				}
+
+				if(l==(length-1))
+				{
+					//ostatni cykl petli
+					usartCom_rx.usartCom_rx_state = FINISHED;
+				}
+				else
+				{
+					usartCom_rx.usartCom_rx_state = WAITING_FOR_START_BYTE;
+					usartCom_rx.usartComDataLength=0;
+					usartCom_rx.usartComFunction = FUNC_INVALID;
+				}
+
+				ret=1;
+
+				//trigger tx task
+				pthread_mutex_lock(&mutexCnt);
+				canTx++;
+				pthread_cond_signal(&condUsartCanTx);
+				pthread_mutex_unlock(&mutexCnt);
 			}
 			else
 			{
-				printf("usartComCritStats.usartComFramesWaitingForStop++\n");
-				//usartComCritStats.usartComFramesWaitingForStop++;
-				goto ERROR;
+				usartComCritStats.usartComFramesWaitingForStop++;
+				usartCom_rx.usartCom_rx_state = WAITING_FOR_START_BYTE;
+				usartCom_rx.usartComDataLength=0;
+				usartCom_rx.usartComFunction = FUNC_INVALID;
 			}
 			break;
 
-		case FINISHED:
-			//bajty za bajtem STOPu sa ignorowane, konczymy return 0
-			printf("usartComCritStats.usartComBytesAfterFinish++\n");
-			//usartComCritStats.usartComBytesAfterFinish++;
-			break;
-
 		default:
-			printf("usartComCritStats.usartComShouldNotHappen++\n");
-			//usartComCritStats.usartComShouldNotHappen++;
-			goto ERROR;
+			usartComCritStats.usartComShouldNotHappen++;
+			return -1;
 
 		} //END of switch (usartCom_rx.usartCom_rx_state)
 
@@ -315,36 +458,24 @@ static int parseRxProtocol(unsigned char *buff, unsigned int length, bool flush)
 
 	} //END of for (l=0; l<length; l++)
 
-	//przychodza bajty, a my czekamy na bajt startu, bez tego po odebraniu 1 jakiegos bajtu zwracalibysmy "partial frame"
-	if (usartCom_rx.usartCom_rx_state == WAITING_FOR_START_BYTE)
+	if ((usartCom_rx.usartCom_rx_state != FINISHED) &&
+		(usartCom_rx.usartCom_rx_state != WAITING_FOR_START_BYTE))
 	{
-		printf("usartComCritStats.usartComBufsWithoutContext++\n");
-		//usartComCritStats.usartComBufsWithoutContext++;
-		return -2;
-	}
+		//niedokonczone ramki
+		//zachowaj stan dla nastepnego read
 
-	//niedokonczone ramki
-	if (usartCom_rx.usartCom_rx_state != FINISHED)
-	{
-		printf("usartComCritStats.usartComPartialFrames++\n");
-		//usartComCritStats.usartComPartialFrames++;
-		return 1;
+		//zwraca czy byla choc jedna do mnie dobra 0-nie, 1-tak
+		return ret;
 	}
 	else
 	{
-		printf("usartComCritStats.usartComFramesCompleted++\n");
-		//usartComCritStats.usartComFramesCompleted++;
+		//dokonczone ramki, mogły być tez bledy wewnatrz bufora
+		//przywracamy stan początkowy
 		usartCom_rx.usartCom_rx_state = WAITING_FOR_START_BYTE;
 		usartCom_rx.usartComDataLength=0;
 		usartCom_rx.usartComFunction = FUNC_INVALID;
-		return 0;
+
+		//zwraca czy byla choc jedna do mnie dobra 0-nie, 1-tak
+		return ret;
 	}
-
-	ERROR:
-	usartCom_rx.usartCom_rx_state = WAITING_FOR_START_BYTE;
-	usartCom_rx.usartComDataLength=0;
-	usartCom_rx.usartComFunction = FUNC_INVALID;
-	return -1;
 }
-
-

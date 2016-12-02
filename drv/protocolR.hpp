@@ -23,6 +23,12 @@
 #define FUNC_WRITE_ALL_DATA_LENGTH 7
 #define FUNC_WRITE_SSP_DATA_LEN 66
 
+#define PROT_RX_TIMEOUT_US 500000
+
+int protoGetGlobalStats(char* str);
+int protoResetGlobalStats(char* str);
+void protoInit (void);
+
 typedef union
 {
 	struct _usartComWriteAllStr
@@ -40,6 +46,21 @@ typedef union
 
 	volatile uint8_t usartComRxFrame[USART_COM_MAXFRAME];
 } usartComRxUnionFrame_t;
+
+typedef union
+{
+	struct _usartComReadBzStr
+	{
+		//START(1)|ADDR(1)|FUNC(1)|CRC(1)|STOP(1)
+		uint8_t start;
+		uint8_t addr;
+		uint8_t func;
+		uint8_t crc;
+		uint8_t stop;
+	} usartComReadBzStr;
+
+	uint8_t usartComTxFrame[USART_COM_MAXFRAME];
+} usartComTxUnionFrame_t;
 
 typedef enum
 {
@@ -61,12 +82,36 @@ typedef enum
 	WAITING_FOR_ADDR,
 	WAITING_FOR_FUNC_CODE,
 	WAITING_FOR_WRITE_DATA,
-//	WAITING_FOR_READ_DATA, //data comming from other slaves, state until data length field
 	WAITING_FOR_CRC,
 	WAITING_FOR_STOP_BYTE,
-	WAITING_FOR_STOP_BYTE_ERROR_CRC,
 	FINISHED,
 } USART_COM_RX_STATE_t;
+
+typedef struct
+{
+	uint32_t usartComPartialFrames;
+	uint32_t usartComParssedRxOk;
+	uint32_t usartComTxFrames;
+	uint32_t usartComFramesToMe;
+	uint32_t usartComGoodFramesToMe;
+	uint32_t usartComFlushesNr;
+	uint32_t usartComFramesBroadcast;
+	uint32_t usartComFramesToOthers;
+	uint32_t usartComFramesFuncNotSupp;
+	uint32_t usartComFramesWaitingForStart;
+	uint32_t usartComFramesWaitingForStop;
+	uint32_t usartComFramesBedCrc;
+	uint32_t usartComBufsWithoutContext;
+	uint32_t usartComBytesAfterFinish;
+	uint32_t usartComShouldNotHappen;
+	uint32_t usartComParssedRxFailed;
+	uint32_t usartComTimeout;
+
+
+	uint32_t readLinuxErr;
+	uint32_t selectLinuxErr;
+	uint32_t writeLinuxErr;
+} usartComCritStats_t;
 
 
 typedef struct _usartCom_rx
@@ -74,10 +119,13 @@ typedef struct _usartCom_rx
 	usartComRxUnionFrame_t usartComRxUnionFrame;
 	USART_COM_RX_STATE_t usartCom_rx_state;
 	USART_COM_RX_FUNC_t usartComFunction;
-
-	bool usartComToMe;
 	uint16_t usartComDataLength;
-
+	bool usartComToMe;
 } usartCom_rx_t;
 
+typedef struct _usartCom_tx
+{
+	usartComTxUnionFrame_t usartComTxUnionFrame;
+	uint16_t usartComTxDataLength;
+} usartCom_tx_t;
 #endif /* DRV_PROTOCOLR_HPP_ */

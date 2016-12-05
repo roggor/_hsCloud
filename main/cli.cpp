@@ -31,7 +31,7 @@ extern "C"
 
 static pthread_t cli_thread;
 
-int usartComRxPrintStats(struct cli_def *cli, char *command, char *argv[], int argc)
+int usartComRxPrintStats(struct cli_def *cli, const char *command, char *argv[], int argc)
 {
 	//TODO: change it somehow
 	char buf[1000];
@@ -41,7 +41,7 @@ int usartComRxPrintStats(struct cli_def *cli, char *command, char *argv[], int a
     return CLI_OK;
 }
 
-int usartComRxResetStats(struct cli_def *cli, char *command, char *argv[], int argc)
+int usartComRxResetStats(struct cli_def *cli, const char *command, char *argv[], int argc)
 {
 	//TODO: change it somehow
 	char buf[100];
@@ -52,7 +52,7 @@ int usartComRxResetStats(struct cli_def *cli, char *command, char *argv[], int a
     return CLI_OK;
 }
 
-int stanSetDisp(struct cli_def *cli, char *command, char *argv[], int argc)
+int stanSetDisp(struct cli_def *cli, const char *command, char *argv[], int argc)
 {
 	cli_print(cli, (char*)"stanSetDisp\n");
 	return CLI_OK;
@@ -64,7 +64,7 @@ int stanStats(struct cli_def *cli, char *command, char *argv[], int argc)
 	return CLI_OK;
 }
 
-void InitCli(void)
+void *InitCli(void *arg)
 {
 	struct sockaddr_in servaddr;
 	struct cli_command *stats, *stan;
@@ -80,12 +80,12 @@ void InitCli(void)
 
 	// Set up a few simple one-level commands
 	stats=cli_register_command(cli, NULL, (char*)"prot", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, (char*)"help prot");
-	cli_register_command(cli, stats, (char*)"showStats", usartComRxPrintStats, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, (char*)"help showStats");
-	cli_register_command(cli, stats, (char*)"resetStats", usartComRxResetStats, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, (char*)"help resetStats");
+	cli_register_command(cli, stats, (const char*)"showStats", usartComRxPrintStats, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, (const char*)"help showStats");
+	cli_register_command(cli, stats, (const char*)"resetStats", usartComRxResetStats, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, (const char*)"help resetStats");
 //	cli_register_command(cli, stats, (char*)"stanStats", stanStats, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, (char*)"help stanStats");
 
 	stan=cli_register_command(cli, NULL, (char*)"stan", NULL, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, (char*)"help stan");
-	cli_register_command(cli, stan, (char*)"setDisp", stanSetDisp, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, (char*)"help stanSetDisp");
+	cli_register_command(cli, stan, (const char*)"setDisp", stanSetDisp, PRIVILEGE_UNPRIVILEGED, MODE_EXEC, (const char*)"help stanSetDisp");
 	// Create a socket
 	s = socket(AF_INET, SOCK_STREAM, 0);
 	setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
@@ -114,7 +114,7 @@ void InitCli(void)
 void InitCliThread(void)
 {
 	int res;
-	res = pthread_create(&cli_thread, nullptr, InitCli, nullptr);
+	res = pthread_create(&cli_thread, NULL, InitCli, NULL);
 	if (res != 0) {
 		perror("Thread cli_thread creation failed");
 		exit(EXIT_FAILURE);

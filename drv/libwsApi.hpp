@@ -14,7 +14,7 @@
 #define MAX_RX_PAYLOAD 1400
 
 void libwsApi_init(void); //creates thread
-int libwsApi_send(char *pData, int dataLen);
+int libwsApi_send(const char *pData, int dataLen);
 int libwsApi_recv(char *pData);
 void libwsApi_shutdown(void);
 

@@ -83,7 +83,7 @@ void libwsApi_init(void)
 	lwsThread=std::thread(&lwsThreadFunc);
 }
 
-int libwsApi_send(char *pData, int dataLen)
+int libwsApi_send(const char *pData, int dataLen)
 {
 	if (connState != ESTABLISHED)
 	{

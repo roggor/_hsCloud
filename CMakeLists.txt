@@ -34,7 +34,7 @@ include_directories("../../_install_${TARGET_ARCH}/include")
 link_directories("../../_install_${TARGET_ARCH}/lib")
 
 add_subdirectory(libs)
-add_definitions(-std=c++0x -fpermissive)
+add_definitions(-std=c++0x)
 
 file(GLOB SOURCES "main/*.cpp" "drv/*.cpp" "libs/sqlite/*.c" "./*.cpp")
 

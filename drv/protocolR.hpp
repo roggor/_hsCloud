@@ -81,7 +81,7 @@ typedef enum
 	WAITING_FOR_START_BYTE = 0,
 	WAITING_FOR_ADDR,
 	WAITING_FOR_FUNC_CODE,
-	WAITING_FOR_WRITE_DATA,
+	WAITING_FOR_DATA,
 	WAITING_FOR_CRC,
 	WAITING_FOR_STOP_BYTE,
 	FINISHED,
@@ -89,20 +89,16 @@ typedef enum
 
 typedef struct
 {
-	uint32_t usartComPartialFrames;
-	uint32_t usartComParssedRxOk;
 	uint32_t usartComTxFrames;
 	uint32_t usartComFramesToMe;
 	uint32_t usartComGoodFramesToMe;
-	uint32_t usartComFlushesNr;
 	uint32_t usartComFramesBroadcast;
 	uint32_t usartComFramesToOthers;
+	uint32_t usartComGoodFramesToOthers;
 	uint32_t usartComFramesFuncNotSupp;
 	uint32_t usartComFramesWaitingForStart;
 	uint32_t usartComFramesWaitingForStop;
 	uint32_t usartComFramesBedCrc;
-	uint32_t usartComBufsWithoutContext;
-	uint32_t usartComBytesAfterFinish;
 	uint32_t usartComShouldNotHappen;
 	uint32_t usartComParssedRxFailed;
 	uint32_t usartComTimeout;

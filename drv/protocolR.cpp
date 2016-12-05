@@ -63,22 +63,20 @@ int protoGetGlobalStats(char* str)
 	unsigned int ret;
 
 	ret=sprintf(p, "Protocol get stats [dev=%s]:\n", PROTO_R_DEV_NAME); p=p+ret;
-	STATS(usartComCritStats.usartComPartialFrames,         "PartialFrames                    :")
-	STATS(usartComCritStats.usartComParssedRxOk,           "ParssedRxOk                      :")
-	STATS(usartComCritStats.usartComTxFrames,              "TxFrames                         :")
-	STATS(usartComCritStats.usartComFramesToMe,            "FramesToMe                       :")
-	STATS(usartComCritStats.usartComGoodFramesToMe,        "GoodFramesToMe                   :")
-	STATS(usartComCritStats.usartComFlushesNr,             "FlushesNr                        :")
-	STATS(usartComCritStats.usartComFramesBroadcast,       "FramesBroadcast(default=0)       :")
-	STATS(usartComCritStats.usartComFramesToOthers,        "FramesToOthers(default=0)        :")
-	STATS(usartComCritStats.usartComFramesFuncNotSupp,     "FramesFuncNotSupp(default=0)     :")
-	STATS(usartComCritStats.usartComFramesWaitingForStart, "FramesWaitingForStart(default=0) :")
-	STATS(usartComCritStats.usartComFramesWaitingForStop,  "FramesWaitingForStop(default=0)  :")
-	STATS(usartComCritStats.usartComFramesBedCrc,          "FramesBedCrc(default=0)          :")
-	STATS(usartComCritStats.usartComBufsWithoutContext,    "FramesWithoutContext(default=0)  :")
-	STATS(usartComCritStats.usartComShouldNotHappen,       "ShouldNotHappen(default=0)       :")
-	STATS(usartComCritStats.usartComParssedRxFailed,       "ParssedRxFailed(default=0)       :")
-	STATS(usartComCritStats.usartComTimeout,               "Timeout(default=0)               :")
+	STATS(usartComCritStats.usartComTxFrames,              "TxFrames                 :")
+
+	STATS(usartComCritStats.usartComFramesToMe,            "FramesToMe               :")
+	STATS(usartComCritStats.usartComGoodFramesToMe,        "GoodFramesToMe           :")
+	STATS(usartComCritStats.usartComFramesToOthers,        "FramesToOthers(0)        :")
+	STATS(usartComCritStats.usartComFramesBroadcast,       "FramesBroadcast(0)       :")
+	STATS(usartComCritStats.usartComGoodFramesToOthers,    "GoodFramesToOthers(0)    :")
+	STATS(usartComCritStats.usartComTimeout,               "Timeout(0)               :")
+
+	STATS(usartComCritStats.usartComFramesFuncNotSupp,     "FramesFuncNotSupp(0)     :")
+	STATS(usartComCritStats.usartComFramesWaitingForStart, "FramesWaitingForStart(0) :")
+	STATS(usartComCritStats.usartComFramesWaitingForStop,  "FramesWaitingForStop(0)  :")
+	STATS(usartComCritStats.usartComFramesBedCrc,          "FramesBedCrc(0)          :")
+	STATS(usartComCritStats.usartComShouldNotHappen,       "ShouldNotHappen(0)       :")
 
 	ret=sprintf(p, "\n"); p=p+ret;
 	ret=sprintf(p, "Linux errors:\n"); p=p+ret;
@@ -164,8 +162,9 @@ void protoInit (void)
 static void *rxRs485Thread(void *arg)
 {
 	int retSelect, retRead, parseRet;
-	unsigned char buff[10000];
+	unsigned char buff[1];
 	fd_set set;
+	long timeoutUs = PROT_RX_TIMEOUT_US;
 	struct timeval timeout;
 	int retFlush;
 
@@ -175,20 +174,24 @@ static void *rxRs485Thread(void *arg)
 		FD_ZERO(&set);
 		FD_SET(fd, &set);
 		timeout.tv_sec = 0;
-		timeout.tv_usec = PROT_RX_TIMEOUT_US;
+		timeout.tv_usec = timeoutUs;
 
 		retSelect=select(fd + 1, &set, NULL, NULL, &timeout);
 		if(retSelect < 0)
 		{
 			usartComCritStats.selectLinuxErr++;
 			dbg_err("selectLinuxErr\n");
+
+			timeoutUs = PROT_RX_TIMEOUT_US;
 		}
 		else if(retSelect == 0)
 		{
-			//Timeout, only clean global variables in parseRxProtocol, and return rx_state
+			//timeout, only clean global variables in parseRxProtocol, and return rx_state
 			retFlush=parseRxProtocol(NULL, 0, true);
 			usartComCritStats.usartComTimeout++;
 			dbg_info("timeout: rx_state=%u\n", retFlush);
+
+			timeoutUs = PROT_RX_TIMEOUT_US;
 		}
 		else
 		{
@@ -198,6 +201,8 @@ static void *rxRs485Thread(void *arg)
 			{
 				dbg_err ("readLinuxErr\n");
 				usartComCritStats.readLinuxErr++;
+
+				timeoutUs = PROT_RX_TIMEOUT_US;
 				continue;
 			}
 
@@ -206,6 +211,20 @@ static void *rxRs485Thread(void *arg)
 			{
 				retFlush=parseRxProtocol(NULL, 0, true);
 				dbg_err("parse RX critical, rx_state=%u\n", retFlush);
+
+				timeoutUs = PROT_RX_TIMEOUT_US;
+			}
+			else if (!parseRet)
+			{
+				//nie odebrano żadnej całej ramki, zmienić timeout selecta
+				timeoutUs = PROT_RX_TIMEOUT_US - timeout.tv_usec;
+				if (timeoutUs<0)
+					timeoutUs=0;
+			}
+			else
+			{
+				//odebrano przy najmniej jedną całą ramkę, nie updatuje timeoutu
+				timeoutUs = PROT_RX_TIMEOUT_US;
 			}
 		}
 	}
@@ -268,7 +287,7 @@ static void *txRs485Thread(void *arg)
 
 /*
  * return:
- * 0  - completed frame received/flush
+ * 0  - at least one complete frame received/flush
  * 1  - partial frame received
  * -1 - error during receiving
  * -2 - frames without context
@@ -278,13 +297,6 @@ static void *txRs485Thread(void *arg)
  */
 static int parseRxProtocol(unsigned char *buff, unsigned int length, bool flush)
 {
-	/*
-	 * sprawdzac usartComToMe
-	 * zwracac dobry stan do glownej funkcji (tzn czy choc jedna ramka dobra)
-	 * sprawdzic wszystko
-	 * ten timeout w select uzaleznic od tego czy choc jedna dobra
-	 */
-
 	unsigned int l;
 	int ret = 0;
 	uint8_t usartComRxByte;
@@ -292,8 +304,6 @@ static int parseRxProtocol(unsigned char *buff, unsigned int length, bool flush)
 
 	if (flush)
 	{
-		usartComCritStats.usartComFlushesNr++;
-
 		flushRxState=usartCom_rx.usartCom_rx_state;
 		usartCom_rx.usartCom_rx_state = WAITING_FOR_START_BYTE;
 		usartCom_rx.usartComDataLength=0;
@@ -318,7 +328,6 @@ static int parseRxProtocol(unsigned char *buff, unsigned int length, bool flush)
 			if (usartComRxByte == USART_COM_SLAVE_ADDR)
 			{
 				usartComCritStats.usartComFramesToMe++;
-				usartCom_rx.usartCom_rx_state = WAITING_FOR_FUNC_CODE;
 				usartCom_rx.usartComToMe=true;
 			}
 			else
@@ -328,21 +337,21 @@ static int parseRxProtocol(unsigned char *buff, unsigned int length, bool flush)
 				else
 					usartComCritStats.usartComFramesToOthers++;
 
-				usartCom_rx.usartCom_rx_state = WAITING_FOR_FUNC_CODE;
 				usartCom_rx.usartComToMe=false;
 			}
+			usartCom_rx.usartCom_rx_state = WAITING_FOR_FUNC_CODE;
 			break;
 
 		case WAITING_FOR_FUNC_CODE:
 			switch (usartComRxByte)
 			{
 			case FUNC_WRITE_ALL:
-				usartCom_rx.usartCom_rx_state = WAITING_FOR_WRITE_DATA;
+				usartCom_rx.usartCom_rx_state = WAITING_FOR_DATA;
 				usartCom_rx.usartComFunction = FUNC_WRITE_ALL;
 				break;
-			/*
-			 * add new functions
-			 */
+				/*
+				 * add new functions
+				 */
 
 			default:
 				usartComCritStats.usartComFramesFuncNotSupp++;
@@ -353,20 +362,20 @@ static int parseRxProtocol(unsigned char *buff, unsigned int length, bool flush)
 			}
 			break;
 
-		case WAITING_FOR_WRITE_DATA: // START(1)|ADD(1)|FUNC(1)|WY(2)|DISP(4)|DISP_OPTIONS(1)|CRC(1)|STOP(1)
+		case WAITING_FOR_DATA: // START(1)|ADD(1)|FUNC(1)|WY(2)|DISP(4)|DISP_OPTIONS(1)|CRC(1)|STOP(1)
 			switch (usartCom_rx.usartComFunction)
 			{
 			case FUNC_WRITE_ALL:
 				if (usartCom_rx.usartComDataLength >= (FUNC_WRITE_ALL_LENGTH-3))
 					usartCom_rx.usartCom_rx_state=WAITING_FOR_CRC;
 				break;
-			/*
-			 * add new functions
-			 */
+				/*
+				 * add new functions
+				 */
 
 			default:
 				usartComCritStats.usartComShouldNotHappen++;
-				return -1;
+				return (-1);
 			}
 			break;
 
@@ -388,8 +397,6 @@ static int parseRxProtocol(unsigned char *buff, unsigned int length, bool flush)
 				usartCom_rx.usartComRxUnionFrame.usartComRxFrame[usartCom_rx.usartComDataLength]=usartComRxByte;
 				usartCom_rx.usartComDataLength++;
 
-				usartComCritStats.usartComGoodFramesToMe++;
-
 #if 0
 				printf ("RCVED: ");
 				int k;
@@ -399,83 +406,54 @@ static int parseRxProtocol(unsigned char *buff, unsigned int length, bool flush)
 #endif
 
 				if(usartCom_rx.usartComToMe)
-
-				switch (usartCom_rx.usartComFunction)
 				{
-				case FUNC_WRITE_ALL:
-					dbg_info("service FUNC_WRITE_ALL\n");
-					break;
-				/*
-				 * add new functions
-				 */
+					//resetting timeout only if good frames to me
+					ret=1;
 
-				default:
-					usartComCritStats.usartComShouldNotHappen++;
-					return -1;
-				}
+					pthread_mutex_lock(&mutexCnt);
+					canTx++;
+					pthread_cond_signal(&condUsartCanTx);
+					pthread_mutex_unlock(&mutexCnt);
 
-				if(l==(length-1))
-				{
-					//ostatni cykl petli
-					usartCom_rx.usartCom_rx_state = FINISHED;
+					usartComCritStats.usartComGoodFramesToMe++;
+					switch (usartCom_rx.usartComFunction)
+					{
+					case FUNC_WRITE_ALL:
+						dbg_info("service FUNC_WRITE_ALL\n");
+						break;
+						/*
+						 * add new functions
+						 */
+
+					default:
+						usartComCritStats.usartComShouldNotHappen++;
+						return (-1);
+					}
 				}
 				else
 				{
-					usartCom_rx.usartCom_rx_state = WAITING_FOR_START_BYTE;
-					usartCom_rx.usartComDataLength=0;
-					usartCom_rx.usartComFunction = FUNC_INVALID;
+					//don't reset timeout (ret=0)
+					usartComCritStats.usartComGoodFramesToOthers++;
 				}
-
-				ret=1;
-
-				//trigger tx task
-				pthread_mutex_lock(&mutexCnt);
-				canTx++;
-				pthread_cond_signal(&condUsartCanTx);
-				pthread_mutex_unlock(&mutexCnt);
 			}
 			else
-			{
 				usartComCritStats.usartComFramesWaitingForStop++;
-				usartCom_rx.usartCom_rx_state = WAITING_FOR_START_BYTE;
-				usartCom_rx.usartComDataLength=0;
-				usartCom_rx.usartComFunction = FUNC_INVALID;
-			}
+
+			usartCom_rx.usartCom_rx_state = WAITING_FOR_START_BYTE;
+			usartCom_rx.usartComDataLength = 0;
+			usartCom_rx.usartComFunction = FUNC_INVALID;
 			break;
 
 		default:
 			usartComCritStats.usartComShouldNotHappen++;
-			return -1;
-
+			return (-1);
 		} //END of switch (usartCom_rx.usartCom_rx_state)
 
-		if ((usartCom_rx.usartCom_rx_state != WAITING_FOR_START_BYTE) &&
-				(usartCom_rx.usartCom_rx_state != FINISHED))
+		if ((usartCom_rx.usartCom_rx_state != WAITING_FOR_START_BYTE))
 		{
 			usartCom_rx.usartComRxUnionFrame.usartComRxFrame[usartCom_rx.usartComDataLength]=usartComRxByte;
 			usartCom_rx.usartComDataLength++;
 		}
-
 	} //END of for (l=0; l<length; l++)
-
-	if ((usartCom_rx.usartCom_rx_state != FINISHED) &&
-		(usartCom_rx.usartCom_rx_state != WAITING_FOR_START_BYTE))
-	{
-		//niedokonczone ramki
-		//zachowaj stan dla nastepnego read
-
-		//zwraca czy byla choc jedna do mnie dobra 0-nie, 1-tak
-		return ret;
-	}
-	else
-	{
-		//dokonczone ramki, mogły być tez bledy wewnatrz bufora
-		//przywracamy stan początkowy
-		usartCom_rx.usartCom_rx_state = WAITING_FOR_START_BYTE;
-		usartCom_rx.usartComDataLength=0;
-		usartCom_rx.usartComFunction = FUNC_INVALID;
-
-		//zwraca czy byla choc jedna do mnie dobra 0-nie, 1-tak
-		return ret;
-	}
+	return ret;
 }

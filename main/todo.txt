@@ -1,1 +1,3 @@
 -debug tokeny
+-/* TODO: any locking needed? */ dla zczytywania resetowania statystyk z protocolR
+-budowanie systemu
